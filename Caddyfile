@@ -1,0 +1,44 @@
+{
+  admin off
+  auto_https off
+  persist_config off
+
+  servers {
+    protocols h1
+  }
+
+  frankenphp {
+    num_threads {$PHP_THREADS:4}
+  }
+}
+
+:8080 {
+  root * /app/public
+  encode zstd gzip
+  header X-Content-Type-Options nosniff
+
+  route {
+    # These directories are private even though Kirby's standard layout puts
+    # them under the document root. .htaccess has no effect in this runtime.
+    @private path /content /content/* /site /site/* /kirby /kirby/* /vendor /vendor/* /node_modules /node_modules/* /tests /tests/* /src /src/*
+    respond @private 404
+
+    # Protect hidden files at every depth, including .git and .env.
+    # ACME challenges are handled by the external Caddy proxy.
+    @hidden path_regexp hidden (^|/)\.
+    respond @hidden 404
+
+    @projectFiles path /composer.json /composer.lock /package.json /package-lock.json /Dockerfile /compose.yaml /compose.yml /README.md /AGENTS.md /LICENSE /php.ini
+    respond @projectFiles 404
+
+    # Kirby uses a single front controller. Never execute uploaded PHP files
+    # or arbitrary PHP scripts elsewhere in the mounted project.
+    @otherPhp {
+      path_regexp php (?i)\.php(/|$)
+      not path /index.php /index.php/*
+    }
+    respond @otherPhp 404
+
+    php_server
+  }
+}
